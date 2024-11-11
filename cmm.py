@@ -16,6 +16,12 @@ def rename_subtitles():
     # 获取后缀
     suffix = entry_suffix.get()
 
+    # 检查视频和字幕文件数量是否相同
+    if len(video_paths) != len(subtitle_paths):
+        messagebox.showerror("错误", "视频文件和字幕文件数量不匹配！")
+        return
+
+    success_count = 0
     for video_path, subtitle_path in zip(video_paths, subtitle_paths):
         # 构建新的字幕文件名
         new_subtitle_name = os.path.splitext(os.path.basename(video_path))[0] + suffix + os.path.splitext(os.path.basename(subtitle_path))[1]
@@ -24,16 +30,20 @@ def rename_subtitles():
         # 重命名字幕文件
         try:
             os.rename(subtitle_path, new_subtitle_path)
-            messagebox.showinfo("成功", f"字幕文件已成功重命名: {new_subtitle_path}")
+            success_count += 1
+            print(f"字幕文件已成功重命名: {new_subtitle_path}")
         except Exception as e:
             messagebox.showerror("错误", f"重命名失败: {e}")
+
+    # 如果有文件重命名成功，显示完成对话框
+    if success_count > 0:
+        messagebox.showinfo("完成", f"共成功重命名 {success_count} 个字幕文件。")
+    else:
+        messagebox.showinfo("完成", "没有字幕文件被重命名。")
 
 # 创建GUI
 root = tk.Tk()
 root.title("字幕重命名工具")
-
-# 设置字体为中文支持的字体
-#root.configure(font=('楷体', 10))
 
 # 创建一个按钮，点击后触发rename_subtitles函数
 button_rename = tk.Button(root, text="重命名字幕", command=rename_subtitles)
