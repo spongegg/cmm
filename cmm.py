@@ -1,39 +1,50 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox
 import os
-import shutil
 
-def rename_files_with_suffix(src_dir, dest_dir, suffix=""):
-    # 获取两个文件夹中的文件列表
-    src_files = sorted(os.listdir(src_dir))
-    dest_files = sorted(os.listdir(dest_dir))
-
-    # 确保两个文件夹中的文件数量相同
-    if len(src_files) != len(dest_files):
-        print("Error: 两个文件夹中的文件数量不相同！")
+def rename_subtitles():
+    # 获取视频文件路径
+    video_paths = filedialog.askopenfilenames(title="选择视频文件", filetypes=[("视频文件", "*.mp4;*.avi;*.mkv")])
+    if not video_paths:
         return
 
-    for src_file, dest_file in zip(src_files, dest_files):
-        # 获取文件的原扩展名
-        dest_ext = os.path.splitext(dest_file)[1]
-        
-        # 构造新的文件名（包含后缀）
-        new_name = os.path.splitext(src_file)[0] + suffix + dest_ext
-        
-        # 获取完整路径
-        src_path = os.path.join(src_dir, src_file)
-        dest_path = os.path.join(dest_dir, dest_file)
-        new_dest_path = os.path.join(dest_dir, new_name)
-        
-        # 重命名文件夹b中的文件
-        os.rename(dest_path, new_dest_path)
-        print(f"重命名 {dest_file} 为 {new_name}")
+    # 获取字幕文件路径
+    subtitle_paths = filedialog.askopenfilenames(title="选择字幕文件", filetypes=[("字幕文件", "*.srt;*.ass")])
+    if not subtitle_paths:
+        return
 
-        # 复制重命名后的文件到文件夹 a 中
-        new_src_path = os.path.join(src_dir, new_name)
-        shutil.copy2(new_dest_path, new_src_path)
+    # 获取后缀
+    suffix = entry_suffix.get()
 
-# 示例用法
-src_dir = 'C:Users\Sponge\Videosa'  # 文件夹 a 的路径
-dest_dir = 'C:\Users\Sponge\Pictures\b' # 文件夹 b 的路径
-suffix = ".chs" # 想要添加的后缀
+    for video_path, subtitle_path in zip(video_paths, subtitle_paths):
+        # 构建新的字幕文件名
+        new_subtitle_name = os.path.splitext(os.path.basename(video_path))[0] + suffix + os.path.splitext(os.path.basename(subtitle_path))[1]
+        new_subtitle_path = os.path.join(os.path.dirname(video_path), new_subtitle_name)
 
-rename_files_with_suffix(src_dir, dest_dir, suffix)
+        # 重命名字幕文件
+        try:
+            os.rename(subtitle_path, new_subtitle_path)
+            messagebox.showinfo("成功", f"字幕文件已成功重命名: {new_subtitle_path}")
+        except Exception as e:
+            messagebox.showerror("错误", f"重命名失败: {e}")
+
+# 创建GUI
+root = tk.Tk()
+root.title("字幕重命名工具")
+
+# 设置字体为中文支持的字体
+#root.configure(font=('楷体', 10))
+
+# 创建一个按钮，点击后触发rename_subtitles函数
+button_rename = tk.Button(root, text="重命名字幕", command=rename_subtitles)
+button_rename.pack(pady=20)
+
+# 创建一个输入框，用于输入后缀
+entry_suffix = tk.Entry(root)
+entry_suffix.pack(pady=10)
+
+# 设置输入框的提示文本为中文
+entry_suffix.insert(0, ".chs")
+
+# 运行GUI
+root.mainloop()
