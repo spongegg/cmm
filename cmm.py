@@ -22,10 +22,16 @@ def rename_subtitles():
         return
 
     success_count = 0
+    subtitle_folders = set()  # 用于存储字幕文件所在的文件夹路径
+
     for video_path, subtitle_path in zip(video_paths, subtitle_paths):
         # 构建新的字幕文件名
         new_subtitle_name = os.path.splitext(os.path.basename(video_path))[0] + suffix + os.path.splitext(os.path.basename(subtitle_path))[1]
         new_subtitle_path = os.path.join(os.path.dirname(video_path), new_subtitle_name)
+
+        # 获取字幕文件所在的文件夹路径
+        subtitle_folder = os.path.dirname(subtitle_path)
+        subtitle_folders.add(subtitle_folder)
 
         # 重命名字幕文件
         try:
@@ -41,9 +47,25 @@ def rename_subtitles():
     else:
         messagebox.showinfo("完成", "没有字幕文件被重命名。")
 
+    # 尝试删除字幕文件所在的文件夹
+    for folder in subtitle_folders:
+        try:
+            # 检查文件夹是否为空
+            if not os.listdir(folder):  # 文件夹为空
+                os.rmdir(folder)  # 删除空文件夹
+                print(f"已删除空文件夹: {folder}")
+        except Exception as e:
+            messagebox.showerror("错误", f"删除文件夹失败: {e}")
+
 # 创建GUI
 root = tk.Tk()
 root.title("字幕重命名工具")
+
+
+# 设置窗口大小为 400x300
+root.geometry("259x123")
+
+
 
 # 创建一个按钮，点击后触发rename_subtitles函数
 button_rename = tk.Button(root, text="重命名字幕", command=rename_subtitles)
