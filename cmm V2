@@ -1,0 +1,128 @@
+import os
+import shutil
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from difflib import SequenceMatcher
+
+class SubtitleRenamerApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("字幕重命名工具")
+        self.root.geometry("263x138")  # 设置初始窗口大小
+        self.root.resizable(True, True)  # 允许调整大小
+
+        # 默认后缀
+        self.suffix = tk.StringVar(value=".chs")
+
+        # 创建输入框和标签
+        self.label_suffix = tk.Label(root, text="后缀:")
+        self.label_suffix.pack(pady=5)
+
+        self.entry_suffix = tk.Entry(root, textvariable=self.suffix, font=('Arial', 14))
+        self.entry_suffix.pack(pady=5)
+
+        # 创建一个按钮用于选择文件和启动重命名操作
+        self.btn_rename = tk.Button(root, text="选择文件并启动重命名", command=self.rename_files)
+        self.btn_rename.pack(pady=10)
+
+        # 监听窗口大小变化
+        self.root.bind("<Configure>", self.print_geometry)
+
+    def rename_files(self):
+        """
+        启动选择视频和字幕文件并重命名操作。
+        """
+        # 选择视频文件
+        video_files = filedialog.askopenfilenames(title="选择视频文件", filetypes=[("视频文件", "*.mp4;*.avi;*.mkv;*.mov")])
+        if not video_files:
+            messagebox.showerror("错误", "未选择视频文件！")
+            return
+
+        # 选择字幕文件
+        subtitle_files = filedialog.askopenfilenames(title="选择字幕文件", filetypes=[("字幕文件", "*.srt;*.ass;*.vtt")])
+        if not subtitle_files:
+            messagebox.showerror("错误", "未选择字幕文件！")
+            return
+
+        if len(video_files) != len(subtitle_files):
+            # 允许用户继续操作并尝试匹配
+            if not messagebox.askyesno("文件数量不一致", "视频文件和字幕文件数量不一致！是否继续尝试匹配？"):
+                return
+
+        # 智能匹配字幕和视频文件
+        matched_pairs = self.match_files(video_files, subtitle_files)
+        if not matched_pairs:
+            messagebox.showerror("匹配失败", "未找到任何有效的匹配项！")
+            return
+
+        renamed_count = 0
+
+        for video_file, subtitle_file in matched_pairs:
+            video_filename = os.path.splitext(os.path.basename(video_file))[0]
+            video_dir = os.path.dirname(video_file)
+            subtitle_dir = os.path.dirname(subtitle_file)
+            subtitle_ext = os.path.splitext(subtitle_file)[1]
+            new_subtitle_name = video_filename + self.suffix.get() + subtitle_ext
+            new_subtitle_path = os.path.join(video_dir, new_subtitle_name)  # 新路径为视频文件的文件夹
+
+            # 重命名并移动字幕文件
+            try:
+                shutil.move(subtitle_file, new_subtitle_path)
+                renamed_count += 1
+            except Exception as e:
+                messagebox.showerror("错误", f"无法重命名或移动文件 {subtitle_file}:\n{e}")
+                return
+
+            # 删除原字幕文件夹（如果为空）
+            try:
+                if not os.listdir(subtitle_dir):  # 检查文件夹是否为空
+                    os.rmdir(subtitle_dir)
+            except Exception as e:
+                messagebox.showerror("错误", f"无法删除文件夹 {subtitle_dir}:\n{e}")
+                return
+
+        # 显示结果
+        messagebox.showinfo("操作完成", f"成功重命名并移动 {renamed_count} 个文件！")
+
+    def match_files(self, video_files, subtitle_files):
+        """
+        根据文件名相似度匹配字幕和视频文件。
+        """
+        matched_pairs = []
+        used_subtitles = set()
+
+        for video in video_files:
+            video_name = os.path.splitext(os.path.basename(video))[0]
+            best_match = None
+            highest_score = 0
+
+            for subtitle in subtitle_files:
+                if subtitle in used_subtitles:
+                    continue
+                subtitle_name = os.path.splitext(os.path.basename(subtitle))[0]
+                score = SequenceMatcher(None, video_name, subtitle_name).ratio()
+                if score > highest_score:
+                    best_match = subtitle
+                    highest_score = score
+
+            if best_match:
+                matched_pairs.append((video, best_match))
+                used_subtitles.add(best_match)
+
+        return matched_pairs
+
+    def print_geometry(self, event):
+        """
+        打印窗口当前分辨率（不包含屏幕位置）。
+        """
+        # 仅输出窗口的宽度和高度
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        print(f"窗口当前分辨率: {width}x{height}")
+
+# 创建主窗口
+root = tk.Tk()
+app = SubtitleRenamerApp(root)
+
+# 运行主循环
+root.mainloop()
