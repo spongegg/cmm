@@ -1,82 +1,127 @@
+import os
+import shutil
 import tkinter as tk
 from tkinter import filedialog, messagebox
-import os
+from difflib import SequenceMatcher
 
-def rename_subtitles():
-    # 获取视频文件路径
-    video_paths = filedialog.askopenfilenames(title="选择视频文件", filetypes=[("视频文件", "*.mp4;*.avi;*.mkv")])
-    if not video_paths:
-        return
+class SubtitleRenamerApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("字幕重命名工具")
+        self.root.geometry("340x90")  # 设置初始窗口大小
+        self.root.resizable(True, True)  # 允许调整大小
 
-    # 获取字幕文件路径
-    subtitle_paths = filedialog.askopenfilenames(title="选择字幕文件", filetypes=[("字幕文件", "*.srt;*.ass")])
-    if not subtitle_paths:
-        return
+        # 默认后缀
+        self.suffix = tk.StringVar(value=".chs")
 
-    # 获取后缀
-    suffix = entry_suffix.get()
+        # 创建输入框和标签
+        self.label_suffix = tk.Label(root, text="后缀:")
+        self.label_suffix.grid(row=0, column=0, padx=10, pady=5)
 
-    # 检查视频和字幕文件数量是否相同
-    if len(video_paths) != len(subtitle_paths):
-        messagebox.showerror("错误", "视频文件和字幕文件数量不匹配！")
-        return
+        self.entry_suffix = tk.Entry(root, textvariable=self.suffix, font=('Arial', 14))
+        self.entry_suffix.grid(row=0, column=1, padx=10, pady=5)
 
-    success_count = 0
-    subtitle_folders = set()  # 用于存储字幕文件所在的文件夹路径
+        # 创建一个按钮用于选择文件和启动重命名操作
+        self.btn_rename = tk.Button(root, text="选择文件并启动重命名", command=self.rename_files)
+        self.btn_rename.grid(row=1, column=0, columnspan=2, pady=10)
 
-    for video_path, subtitle_path in zip(video_paths, subtitle_paths):
-        # 构建新的字幕文件名
-        new_subtitle_name = os.path.splitext(os.path.basename(video_path))[0] + suffix + os.path.splitext(os.path.basename(subtitle_path))[1]
-        new_subtitle_path = os.path.join(os.path.dirname(video_path), new_subtitle_name)
+    def rename_files(self):
+        """
+        启动选择视频和字幕文件并重命名操作。
+        """
+        # 选择视频文件
+        video_files = filedialog.askopenfilenames(title="选择视频文件", filetypes=[("视频文件", "*.mp4;*.avi;*.mkv;*.mov")])
+        if not video_files:
+            messagebox.showerror("错误", "未选择视频文件！")
+            return
 
-        # 获取字幕文件所在的文件夹路径
-        subtitle_folder = os.path.dirname(subtitle_path)
-        subtitle_folders.add(subtitle_folder)
+        # 选择字幕文件
+        subtitle_files = filedialog.askopenfilenames(title="选择字幕文件", filetypes=[("字幕文件", "*.srt;*.ass;*.vtt")])
+        if not subtitle_files:
+            messagebox.showerror("错误", "未选择字幕文件！")
+            return
 
-        # 重命名字幕文件
-        try:
-            os.rename(subtitle_path, new_subtitle_path)
-            success_count += 1
-            print(f"字幕文件已成功重命名: {new_subtitle_path}")
-        except Exception as e:
-            messagebox.showerror("错误", f"重命名失败: {e}")
+        if len(video_files) != len(subtitle_files):
+            # 允许用户继续操作并尝试匹配
+            if not messagebox.askyesno("文件数量不一致", "视频文件和字幕文件数量不一致！是否继续尝试匹配？"):
+                return
 
-    # 如果有文件重命名成功，显示完成对话框
-    if success_count > 0:
-        messagebox.showinfo("完成", f"共成功重命名 {success_count} 个字幕文件。")
-    else:
-        messagebox.showinfo("完成", "没有字幕文件被重命名。")
+        # 智能匹配字幕和视频文件
+        matched_pairs = self.match_files(video_files, subtitle_files)
+        if not matched_pairs:
+            messagebox.showerror("匹配失败", "未找到任何有效的匹配项！")
+            return
+        
+        # 显示匹配文件列表并确认
+        matched_files = "\n".join([f"{video} <--> {subtitle}" for video, subtitle in matched_pairs])
+        if not messagebox.askyesno("确认匹配", f"以下文件将被重命名：\n{matched_files}\n\n是否继续?"):
+            return
 
-    # 尝试删除字幕文件所在的文件夹
-    for folder in subtitle_folders:
-        try:
-            # 检查文件夹是否为空
-            if not os.listdir(folder):  # 文件夹为空
-                os.rmdir(folder)  # 删除空文件夹
-                print(f"已删除空文件夹: {folder}")
-        except Exception as e:
-            messagebox.showerror("错误", f"删除文件夹失败: {e}")
+        renamed_count = 0
 
-# 创建GUI
+        for video_file, subtitle_file in matched_pairs:
+            video_filename = os.path.splitext(os.path.basename(video_file))[0]
+            video_dir = os.path.dirname(video_file)
+            subtitle_dir = os.path.dirname(subtitle_file)
+            subtitle_ext = os.path.splitext(subtitle_file)[1]
+            new_subtitle_name = video_filename + self.suffix.get() + subtitle_ext
+            new_subtitle_path = os.path.join(video_dir, new_subtitle_name)  # 新路径为视频文件的文件夹
+
+            # 检查目标目录中是否已经存在同名文件
+            if os.path.exists(new_subtitle_path):
+                response = messagebox.askyesno("文件已存在", f"目标文件 {new_subtitle_name} 已存在，是否覆盖？")
+                if not response:
+                    continue  # 如果用户选择不覆盖，跳过当前文件
+
+            # 重命名并移动字幕文件
+            try:
+                shutil.move(subtitle_file, new_subtitle_path)
+                renamed_count += 1
+            except Exception as e:
+                messagebox.showerror("错误", f"无法重命名或移动文件 {subtitle_file}:\n{e}")
+                return
+
+            # 删除原字幕文件夹（如果为空）
+            try:
+                if not os.listdir(subtitle_dir):  # 检查文件夹是否为空
+                    os.rmdir(subtitle_dir)
+            except Exception as e:
+                messagebox.showerror("错误", f"无法删除文件夹 {subtitle_dir}:\n{e}")
+                return
+
+        # 显示结果
+        messagebox.showinfo("操作完成", f"成功重命名并移动 {renamed_count} 个文件！")
+
+    def match_files(self, video_files, subtitle_files):
+        """
+        根据文件名相似度匹配字幕和视频文件。
+        """
+        matched_pairs = []
+        used_subtitles = set()
+
+        for video in video_files:
+            video_name = os.path.splitext(os.path.basename(video))[0]
+            best_match = None
+            highest_score = 0
+
+            for subtitle in subtitle_files:
+                if subtitle in used_subtitles:
+                    continue
+                subtitle_name = os.path.splitext(os.path.basename(subtitle))[0]
+                score = SequenceMatcher(None, video_name, subtitle_name).ratio()
+                if score > highest_score:
+                    best_match = subtitle
+                    highest_score = score
+
+            if best_match:
+                matched_pairs.append((video, best_match))
+                used_subtitles.add(best_match)
+
+        return matched_pairs
+
+# 创建主窗口
 root = tk.Tk()
-root.title("字幕重命名工具")
+app = SubtitleRenamerApp(root)
 
-
-# 设置窗口大小为 400x300
-root.geometry("259x123")
-
-
-
-# 创建一个按钮，点击后触发rename_subtitles函数
-button_rename = tk.Button(root, text="重命名字幕", command=rename_subtitles)
-button_rename.pack(pady=20)
-
-# 创建一个输入框，用于输入后缀
-entry_suffix = tk.Entry(root)
-entry_suffix.pack(pady=10)
-
-# 设置输入框的提示文本为中文
-entry_suffix.insert(0, ".chs")
-
-# 运行GUI
+# 运行主循环
 root.mainloop()
