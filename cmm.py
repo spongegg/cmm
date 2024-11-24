@@ -2,7 +2,7 @@ import os
 import shutil
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from difflib import SequenceMatcher
+import re
 
 class SubtitleRenamerApp:
     def __init__(self, root):
@@ -46,19 +46,23 @@ class SubtitleRenamerApp:
             if not messagebox.askyesno("文件数量不一致", "视频文件和字幕文件数量不一致！是否继续尝试匹配？"):
                 return
 
-        # 智能匹配字幕和视频文件
+        # 顺序匹配字幕和视频文件
         matched_pairs = self.match_files(video_files, subtitle_files)
-        if not matched_pairs:
-            messagebox.showerror("匹配失败", "未找到任何有效的匹配项！")
-            return
-        
+
+        # 列出所有匹配和未匹配的文件（只显示文件名）
+        matched_files = "\n".join([f"{os.path.basename(video)} <--> {os.path.basename(subtitle)}" for video, subtitle in matched_pairs])
+        unmatched_files = "\n".join([f"{os.path.basename(video)} <--> 未匹配字幕" for video in video_files if video not in [x[0] for x in matched_pairs]])
+        unmatched_subtitles = "\n".join([f"未匹配视频: {os.path.basename(subtitle)}" for subtitle in subtitle_files if subtitle not in [x[1] for x in matched_pairs]])
+
         # 显示匹配文件列表并确认
-        matched_files = "\n".join([f"{video} <--> {subtitle}" for video, subtitle in matched_pairs])
-        if not messagebox.askyesno("确认匹配", f"以下文件将被重命名：\n{matched_files}\n\n是否继续?"):
+        confirmation_text = f"以下文件将被重命名：\n{matched_files}\n\n未匹配的文件：\n{unmatched_files}\n{unmatched_subtitles}"
+
+        if not messagebox.askyesno("确认匹配", confirmation_text):
             return
 
         renamed_count = 0
 
+        # 执行重命名
         for video_file, subtitle_file in matched_pairs:
             video_filename = os.path.splitext(os.path.basename(video_file))[0]
             video_dir = os.path.dirname(video_file)
@@ -92,30 +96,39 @@ class SubtitleRenamerApp:
         # 显示结果
         messagebox.showinfo("操作完成", f"成功重命名并移动 {renamed_count} 个文件！")
 
+    def normalize_filename(self, filename, remove_special_chars=True, remove_season_episode=True):
+        """
+        标准化文件名，去掉括号中的内容，并统一为小写格式，提供灵活的规则配置。
+        :param filename: 文件名
+        :param remove_special_chars: 是否去除特殊字符（如空格，连字符等）
+        :param remove_season_episode: 是否保留季集信息（S01E01格式）
+        :return: 标准化后的文件名
+        """
+        # 去掉括号和方括号内的内容
+        filename = re.sub(r'\[.*?\]|\(.*?\)', '', filename)
+
+        # 将文件名转化为小写
+        filename = filename.lower()
+
+        # 根据需要去除特殊字符（如空格，连字符等）
+        if remove_special_chars:
+            filename = re.sub(r'[^a-z0-9]', '', filename)  # 删除非字母和非数字的字符
+        
+        # 如果需要，可以保留季集信息（例如S01E01）
+        if remove_season_episode:
+            filename = re.sub(r's\d{2}e\d{2}', '', filename)  # 去除季集信息，例如 "s01e01"
+        
+        return filename
+
     def match_files(self, video_files, subtitle_files):
         """
-        根据文件名相似度匹配字幕和视频文件。
+        顺序匹配字幕和视频文件
         """
         matched_pairs = []
-        used_subtitles = set()
 
-        for video in video_files:
-            video_name = os.path.splitext(os.path.basename(video))[0]
-            best_match = None
-            highest_score = 0
-
-            for subtitle in subtitle_files:
-                if subtitle in used_subtitles:
-                    continue
-                subtitle_name = os.path.splitext(os.path.basename(subtitle))[0]
-                score = SequenceMatcher(None, video_name, subtitle_name).ratio()
-                if score > highest_score:
-                    best_match = subtitle
-                    highest_score = score
-
-            if best_match:
-                matched_pairs.append((video, best_match))
-                used_subtitles.add(best_match)
+        # 视频文件和字幕文件按顺序一一对应
+        for video, subtitle in zip(video_files, subtitle_files):
+            matched_pairs.append((video, subtitle))
 
         return matched_pairs
 
