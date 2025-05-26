@@ -9,7 +9,7 @@ class SubtitleRenamerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("字幕重命名工具")
-        self.root.geometry("360x100")
+        self.root.geometry("310x100")
         self.root.resizable(True, True)
 
         # 默认后缀
@@ -67,6 +67,8 @@ class SubtitleRenamerApp:
             return
 
         renamed_count = 0
+        subtitle_dirs = set()  # 新增：记录字幕文件夹
+        
         for video_file, subtitle_file in matched_pairs:
             try:
                 new_subtitle_path = self.get_new_subtitle_path(video_file, subtitle_file)
@@ -74,7 +76,15 @@ class SubtitleRenamerApp:
                 renamed_count += 1
             except Exception as e:
                 messagebox.showerror("错误", f"处理文件失败：{subtitle_file}\n{e}")
-
+		
+		# 尝试删除空的字幕文件夹
+        for folder in subtitle_dirs:
+            try:
+                if os.path.isdir(folder) and not os.listdir(folder):
+                    os.rmdir(folder)
+            except Exception as e:
+                print(f"无法删除文件夹 {folder}：{e}")
+                
         messagebox.showinfo("完成", f"成功重命名 {renamed_count} 个字幕文件！")
 
     def normalize_filename(self, filename):
